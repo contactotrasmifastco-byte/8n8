@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Panel de chats</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#fff; --line:#e3e6ea; --text:#1b1f24; --muted:#6b7480;
+    --accent:#0b6bcb; --accent-ink:#fff;
+    --cli:#eef0f3; --bot:#e3f1ff; --hum:#d9f5df; --warn:#fff4d6; --warn-ink:#7a5a00; --danger:#c0392b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14171a; --panel:#1c2024; --line:#2c3238; --text:#e8eaed; --muted:#98a2ad;
+      --accent:#4aa3ff; --accent-ink:#06121f;
+      --cli:#2a2f35; --bot:#173452; --hum:#1b4026; --warn:#3a3014; --warn-ink:#f0d27a; --danger:#ff7b6b;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{cursor:pointer}
+  .hidden{display:none!important}
+
+  /* login */
+  #login{min-height:100%;display:grid;place-items:center;padding:16px}
+  #login form{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;width:100%;max-width:340px;display:grid;gap:12px}
+  #login h1{font-size:1.2rem;margin:0 0 4px}
+  input[type=email],input[type=password],textarea,select{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+  .btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:10px 14px;font-weight:600}
+  .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:500}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .err{color:var(--danger);font-size:.9rem;min-height:1.2em}
+
+  /* app */
+  #app{height:100%;display:grid;grid-template-columns:320px 1fr;grid-template-rows:auto 1fr}
+  header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+  header h1{font-size:1rem;margin:0;flex:1}
+  .tabs{display:flex;gap:6px}
+  .tab{background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 14px}
+  .tab[aria-selected=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+  #lista{background:var(--panel);border-right:1px solid var(--line);overflow:auto}
+  .cli{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer}
+  .cli:hover,.cli[aria-selected=true]{background:var(--bg)}
+  .avatar{width:38px;height:38px;border-radius:50%;background:var(--cli);display:grid;place-items:center;font-weight:700;flex:none}
+  .cli .info{flex:1;min-width:0}
+  .cli .nom{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cli .sub{color:var(--muted);font-size:.85rem}
+  .badge{font-size:.72rem;border-radius:999px;padding:2px 8px;background:var(--bot)}
+  .badge.hum{background:var(--hum)}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none}
+
+  #chat{display:flex;flex-direction:column;min-height:0;min-width:0}
+  #chat .top{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+  #chat .top .t{flex:1;min-width:0}
+  #chat .top .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #back{display:none}
+  #msgs{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:6px}
+  .dia{align-self:center;color:var(--muted);font-size:.8rem;margin:8px 0}
+  .m{max-width:min(80%,520px);padding:8px 12px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+  .m small{display:block;color:var(--muted);font-size:.72rem;margin-top:2px}
+  .m.cliente{background:var(--cli);align-self:flex-start;border-bottom-left-radius:4px}
+  .m.bot{background:var(--bot);align-self:flex-end;border-bottom-right-radius:4px}
+  .m.humano{background:var(--hum);align-self:flex-end;border-bottom-right-radius:4px}
+  .aviso{background:var(--warn);color:var(--warn-ink);padding:8px 16px;font-size:.9rem}
+  #form{display:flex;gap:8px;padding:10px 16px;background:var(--panel);border-top:1px solid var(--line)}
+  #form textarea{resize:none;height:44px}
+  .vacio{margin:auto;color:var(--muted);text-align:center;padding:24px}
+
+  /* pedidos */
+  #pedidos{grid-column:1/-1;overflow:auto;padding:16px;display:grid;gap:12px;align-content:start;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .ped{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:6px}
+  .ped .h{display:flex;justify-content:space-between;gap:8px;font-weight:600}
+  .ped ul{margin:0;padding-left:18px}
+  .ped .mut{color:var(--muted);font-size:.85rem}
+
+  @media (max-width:760px){
+    #app{grid-template-columns:1fr}
+    #chat{display:none}
+    body.abierto #lista{display:none}
+    body.abierto #chat{display:flex}
+    #back{display:inline-block}
+  }
+</style>
+</head>
+<body>
+
+<div id="login" class="hidden">
+  <form id="loginForm">
+    <h1>Panel de chats</h1>
+    <input type="email" id="email" placeholder="Correo" autocomplete="username" required>
+    <input type="password" id="pass" placeholder="Contraseña" autocomplete="current-password" required>
+    <div class="err" id="loginErr"></div>
+    <button class="btn" type="submit">Entrar</button>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <h1>Panel de chats</h1>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabChats" aria-selected="true">Chats</button>
+      <button class="tab" role="tab" id="tabPedidos" aria-selected="false">Pedidos</button>
+    </div>
+    <button class="btn ghost" id="salir">Salir</button>
+  </header>
+
+  <aside id="lista" aria-label="Clientes"></aside>
+
+  <main id="chat">
+    <div class="vacio" id="sinSel">Elige un cliente para ver la conversación.</div>
+    <div class="top hidden" id="top">
+      <button class="btn ghost" id="back" aria-label="Volver">←</button>
+      <div class="t"><b id="cNombre"></b><span class="sub" id="cSub" style="color:var(--muted);font-size:.85rem"></span></div>
+      <button class="btn" id="toggle"></button>
+    </div>
+    <div class="aviso hidden" id="aviso"></div>
+    <div id="msgs" class="hidden" aria-live="polite"></div>
+    <form id="form" class="hidden">
+      <textarea id="texto" placeholder="Escribe un mensaje al cliente…" maxlength="1000"></textarea>
+      <button class="btn" id="enviar" type="submit">Enviar</button>
+    </form>
+  </main>
+
+  <section id="pedidos" class="hidden"></section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+<script>
+// La clave "publishable" es publica por diseno: la seguridad la dan el login y las reglas RLS.
+const SUPABASE_URL = 'https://ugatjpzcyglonluyxnpd.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_W_nvOY5RgYSjKD-OZCFXEA_rif3aFXW';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = s => document.querySelector(s);
+const state = { clientes: new Map(), sel: null, mensajes: [], unread: new Set(), tab: 'chats', iniciado: false, canal: null };
+
+// Todo texto de clientes se inserta como texto (nunca como HTML).
+function h(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c != null) e.append(c);
+  return e;
+}
+const hora = d => new Date(d).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+const dia = d => new Date(d).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+const cop = n => '$' + Number(n).toLocaleString('es-CO');
+function hace(d) {
+  if (!d) return 'sin mensajes';
+  const m = Math.round((Date.now() - new Date(d)) / 60000);
+  if (m < 1) return 'ahora';
+  if (m < 60) return `hace ${m} min`;
+  if (m < 1440) return `hace ${Math.round(m / 60)} h`;
+  return `hace ${Math.round(m / 1440)} d`;
+}
+const nombreDe = c => c.nombre || c.username || c.telefono || c.user_id;
+const dentroDe24h = c => c.ultimo_mensaje_cliente && Date.now() - new Date(c.ultimo_mensaje_cliente) < 24 * 3600 * 1000;
+
+/* ---------- sesion ---------- */
+function mostrarLogin() { $('#app').classList.add('hidden'); $('#login').classList.remove('hidden'); }
+function mostrarApp() { $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); }
+
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('#loginErr').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email: $('#email').value.trim(), password: $('#pass').value });
+  if (error) $('#loginErr').textContent = 'Correo o contraseña incorrectos.';
+});
+$('#salir').addEventListener('click', () => sb.auth.signOut());
+
+sb.auth.onAuthStateChange((_ev, session) => {
+  if (session) { mostrarApp(); if (!state.iniciado) iniciar(); }
+  else {
+    mostrarLogin();
+    state.iniciado = false;
+    if (state.canal) { sb.removeChannel(state.canal); state.canal = null; }
+  }
+});
+
+async function iniciar() {
+  state.iniciado = true;
+  await cargarClientes();
+  suscribir();
+}
+
+/* ---------- clientes ---------- */
+async function cargarClientes() {
+  const { data, error } = await sb.from('clientes').select('*')
+    .order('ultimo_mensaje_cliente', { ascending: false, nullsFirst: false });
+  if (error) { $('#lista').replaceChildren(h('div', { class: 'vacio' }, 'No se pudo cargar: ' + error.message)); return; }
+  state.clientes = new Map(data.map(c => [c.user_id, c]));
+  pintarLista();
+}
+
+function pintarLista() {
+  const orden = [...state.clientes.values()].sort((a, b) =>
+    new Date(b.ultimo_mensaje_cliente || 0) - new Date(a.ultimo_mensaje_cliente || 0));
+  if (!orden.length) { $('#lista').replaceChildren(h('div', { class: 'vacio' }, 'Aún no hay clientes.')); return; }
+  $('#lista').replaceChildren(...orden.map(c =>
+    h('div', { class: 'cli', role: 'button', tabindex: '0', 'aria-selected': String(c.user_id === state.sel), onclick: () => elegir(c.user_id) },
+      h('div', { class: 'avatar' }, nombreDe(c).charAt(0).toUpperCase()),
+      h('div', { class: 'info' },
+        h('div', { class: 'nom' }, nombreDe(c)),
+        h('div', { class: 'sub' }, hace(c.ultimo_mensaje_cliente))),
+      state.unread.has(c.user_id) ? h('span', { class: 'dot', title: 'Mensaje nuevo' }) : null,
+      h('span', { class: 'badge' + (c.modo_humano ? ' hum' : '') }, c.modo_humano ? 'Tú' : 'Bot'))));
+}
+
+/* ---------- chat ---------- */
+async function elegir(id) {
+  state.sel = id;
+  state.unread.delete(id);
+  document.body.classList.add('abierto');
+  pintarLista();
+  const { data, error } = await sb.from('mensajes').select('*').eq('user_id', id)
+    .order('created_at', { ascending: false }).limit(200);
+  if (state.sel !== id) return;
+  state.mensajes = error ? [] : data.reverse();
+  pintarChat();
+}
+
+function pintarChat() {
+  const c = state.clientes.get(state.sel);
+  if (!c) return;
+  $('#sinSel').classList.add('hidden');
+  ['#top', '#msgs', '#form'].forEach(s => $(s).classList.remove('hidden'));
+  $('#cNombre').textContent = nombreDe(c);
+  $('#cSub').textContent = (c.username ? '@' + c.username + ' · ' : '') + (c.telefono || 'sin teléfono visible');
+  $('#toggle').textContent = c.modo_humano ? 'Devolver al bot' : 'Tomar control';
+  $('#toggle').className = 'btn' + (c.modo_humano ? ' ghost' : '');
+
+  const ventana = dentroDe24h(c);
+  const aviso = $('#aviso');
+  if (!ventana) {
+    aviso.textContent = 'Pasaron más de 24 h desde el último mensaje del cliente: WhatsApp no permite enviar texto libre hasta que escriba de nuevo.';
+    aviso.classList.remove('hidden');
+  } else if (!c.modo_humano) {
+    aviso.textContent = 'El bot está atendiendo. Si envías un mensaje, tomas el control y el bot deja de responder.';
+    aviso.classList.remove('hidden');
+  } else aviso.classList.add('hidden');
+  $('#texto').disabled = !ventana;
+  $('#enviar').disabled = !ventana;
+
+  const caja = $('#msgs');
+  const nodos = [];
+  let ultimoDia = '';
+  for (const m of state.mensajes) {
+    const d = dia(m.created_at);
+    if (d !== ultimoDia) { nodos.push(h('div', { class: 'dia' }, d)); ultimoDia = d; }
+    const quien = m.rol === 'humano' ? 'Tú · ' : m.rol === 'bot' ? 'Bot · ' : '';
+    nodos.push(h('div', { class: 'm ' + m.rol }, m.texto, h('small', {}, quien + hora(m.created_at))));
+  }
+  caja.replaceChildren(...nodos);
+  caja.scrollTop = caja.scrollHeight;
+}
+
+$('#back').addEventListener('click', () => document.body.classList.remove('abierto'));
+
+$('#toggle').addEventListener('click', async () => {
+  const c = state.clientes.get(state.sel);
+  if (!c) return;
+  const { error } = await sb.from('clientes').update({ modo_humano: !c.modo_humano }).eq('user_id', c.user_id);
+  if (error) return alert('No se pudo cambiar: ' + error.message);
+  c.modo_humano = !c.modo_humano;
+  pintarLista(); pintarChat();
+});
+
+$('#form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const c = state.clientes.get(state.sel);
+  const texto = $('#texto').value.trim();
+  if (!c || !texto) return;
+  $('#enviar').disabled = true;
+  if (!c.modo_humano) {                       // al escribir tomas el control
+    const { error } = await sb.from('clientes').update({ modo_humano: true }).eq('user_id', c.user_id);
+    if (error) { $('#enviar').disabled = false; return alert('No se pudo tomar el control: ' + error.message); }
+    c.modo_humano = true;
+  }
+  const { error } = await sb.from('mensajes').insert({ user_id: c.user_id, rol: 'humano', texto });
+  $('#enviar').disabled = false;
+  if (error) return alert('No se pudo enviar: ' + error.message);
+  $('#texto').value = '';
+  pintarLista(); pintarChat();
+});
+$('#texto').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#form').requestSubmit(); }
+});
+
+/* ---------- tiempo real ---------- */
+function suscribir() {
+  state.canal = sb.channel('panel')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes' }, p => nuevoMensaje(p.new))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, p => {
+      if (p.eventType === 'DELETE') state.clientes.delete(p.old.user_id);
+      else state.clientes.set(p.new.user_id, p.new);
+      pintarLista();
+      if (state.sel && p.new && p.new.user_id === state.sel) pintarChat();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { if (state.tab === 'pedidos') cargarPedidos(); })
+    .subscribe();
+}
+
+function nuevoMensaje(m) {
+  if (m.user_id === state.sel) {
+    if (!state.mensajes.some(x => x.id === m.id)) { state.mensajes.push(m); pintarChat(); }
+  } else if (m.rol === 'cliente') {
+    state.unread.add(m.user_id);
+    pintarLista();
+  }
+}
+
+/* ---------- pedidos ---------- */
+const ESTADOS = ['nuevo', 'preparando', 'en_camino', 'entregado', 'cancelado'];
+
+async function cargarPedidos() {
+  const { data, error } = await sb.from('pedidos').select('*, clientes(nombre, username)')
+    .order('created_at', { ascending: false }).limit(100);
+  const cont = $('#pedidos');
+  if (error) { cont.replaceChildren(h('div', { class: 'vacio' }, 'No se pudo cargar: ' + error.message)); return; }
+  if (!data.length) { cont.replaceChildren(h('div', { class: 'vacio' }, 'Aún no hay pedidos.')); return; }
+  cont.replaceChildren(...data.map(p => {
+    const cli = p.clientes ? (p.clientes.nombre || p.clientes.username) : p.user_id;
+    const sel = h('select', { 'aria-label': 'Estado del pedido', onchange: async ev => {
+      const { error: er } = await sb.from('pedidos').update({ estado: ev.target.value }).eq('id', p.id);
+      if (er) alert('No se pudo actualizar: ' + er.message);
+    } }, ...ESTADOS.map(s => { const o = h('option', { value: s }, s.replace('_', ' ')); if (s === p.estado) o.selected = true; return o; }));
+    return h('div', { class: 'ped' },
+      h('div', { class: 'h' }, h('span', {}, `#${p.id} · ${cli}`), h('span', {}, cop(p.total))),
+      h('div', { class: 'mut' }, `${dia(p.created_at)} ${hora(p.created_at)}`),
+      h('ul', {}, ...(p.items || []).map(i => h('li', {}, `${i.cantidad} × ${i.nombre}${i.combo ? ' (combo)' : ''}`))),
+      p.direccion ? h('div', {}, '📍 ' + p.direccion) : null,
+      p.notas ? h('div', { class: 'mut' }, 'Notas: ' + p.notas) : null,
+      sel);
+  }));
+}
+
+function cambiarTab(t) {
+  state.tab = t;
+  $('#tabChats').setAttribute('aria-selected', String(t === 'chats'));
+  $('#tabPedidos').setAttribute('aria-selected', String(t === 'pedidos'));
+  const chats = t === 'chats';
+  $('#lista').classList.toggle('hidden', !chats);
+  $('#chat').classList.toggle('hidden', !chats);
+  $('#pedidos').classList.toggle('hidden', chats);
+  if (!chats) cargarPedidos();
+}
+$('#tabChats').addEventListener('click', () => cambiarTab('chats'));
+$('#tabPedidos').addEventListener('click', () => cambiarTab('pedidos'));
+</script>
+</body>
+</html>
