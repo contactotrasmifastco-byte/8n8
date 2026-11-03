@@ -50,6 +50,7 @@
   .cli .info{flex:1;min-width:0}
   .cli .nom{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cli .sub{color:var(--muted);font-size:.85rem}
+  .cli .sub.nuevo{color:var(--text);font-weight:700}
   .badge{font-size:.72rem;border-radius:999px;padding:2px 8px;background:var(--bot)}
   .badge.hum{background:var(--hum)}
   .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none}
@@ -66,6 +67,8 @@
   .m.cliente{background:var(--cli);align-self:flex-start;border-bottom-left-radius:4px}
   .m.bot{background:var(--bot);align-self:flex-end;border-bottom-right-radius:4px}
   .m.humano{background:var(--hum);align-self:flex-end;border-bottom-right-radius:4px}
+  .m .media audio{max-width:100%;display:block}
+  .m .media .foto{max-width:100%;max-height:320px;border-radius:10px;display:block}
   .aviso{background:var(--warn);color:var(--warn-ink);padding:8px 16px;font-size:.9rem}
   #form{display:flex;gap:8px;padding:10px 16px;background:var(--panel);border-top:1px solid var(--line)}
   #form textarea{resize:none;height:44px}
@@ -137,7 +140,7 @@ const SUPABASE_KEY = 'sb_publishable_W_nvOY5RgYSjKD-OZCFXEA_rif3aFXW';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = s => document.querySelector(s);
-const state = { clientes: new Map(), sel: null, mensajes: [], unread: new Set(), tab: 'chats', iniciado: false, canal: null };
+const state = { clientes: new Map(), sel: null, mensajes: [], unread: new Set(), media: new Map(), tab: 'chats', iniciado: false, canal: null };
 
 // Todo texto de clientes se inserta como texto (nunca como HTML).
 function h(tag, attrs = {}, ...kids) {
@@ -209,7 +212,9 @@ function pintarLista() {
       h('div', { class: 'avatar' }, nombreDe(c).charAt(0).toUpperCase()),
       h('div', { class: 'info' },
         h('div', { class: 'nom' }, nombreDe(c)),
-        h('div', { class: 'sub' }, hace(c.ultimo_mensaje_cliente))),
+        state.media.has(c.user_id)
+          ? h('div', { class: 'sub nuevo' }, state.media.get(c.user_id) === 'audio' ? '🎤 Audio nuevo' : '📷 Imagen nueva')
+          : h('div', { class: 'sub' }, hace(c.ultimo_mensaje_cliente))),
       state.unread.has(c.user_id) ? h('span', { class: 'dot', title: 'Mensaje nuevo' }) : null,
       h('span', { class: 'badge' + (c.modo_humano ? ' hum' : '') }, c.modo_humano ? 'Tú' : 'Bot'))));
 }
@@ -218,6 +223,8 @@ function pintarLista() {
 async function elegir(id) {
   state.sel = id;
   state.unread.delete(id);
+  state.media.delete(id);
+  document.title = 'Panel de chats';
   document.body.classList.add('abierto');
   pintarLista();
   const { data, error } = await sb.from('mensajes').select('*').eq('user_id', id)
@@ -256,10 +263,37 @@ function pintarChat() {
     const d = dia(m.created_at);
     if (d !== ultimoDia) { nodos.push(h('div', { class: 'dia' }, d)); ultimoDia = d; }
     const quien = m.rol === 'humano' ? 'Tú · ' : m.rol === 'bot' ? 'Bot · ' : '';
-    nodos.push(h('div', { class: 'm ' + m.rol }, m.texto, h('small', {}, quien + hora(m.created_at))));
+    const burbuja = h('div', { class: 'm ' + m.rol });
+    if (m.tipo === 'audio' || m.tipo === 'imagen') {
+      const hueco = h('div', { class: 'media' }, 'Cargando ' + m.tipo + '…');
+      burbuja.append(hueco);
+      pintarMedio(m, hueco);
+      if (m.texto && !/^\[(audio|imagen)\]$/.test(m.texto)) burbuja.append(h('div', {}, m.texto));
+    } else burbuja.append(m.texto);
+    burbuja.append(h('small', {}, quien + hora(m.created_at)));
+    nodos.push(burbuja);
   }
   caja.replaceChildren(...nodos);
   caja.scrollTop = caja.scrollHeight;
+}
+
+/* Audios e imágenes: se guardan en la tabla medios (base64) y se bajan solo al verlos. */
+const mediosUrl = new Map();   // mensaje_id -> URL del blob
+async function pintarMedio(m, hueco) {
+  let url = mediosUrl.get(m.id);
+  if (!url) {
+    const { data, error } = await sb.from('medios').select('mime,data').eq('mensaje_id', m.id).maybeSingle();
+    if (error || !data) { hueco.textContent = '(no se pudo cargar el ' + m.tipo + ')'; return; }
+    if (!/^(audio\/[\w.+-]+|image\/(jpeg|png|webp|gif))$/.test(data.mime.split(';')[0])) { hueco.textContent = '(archivo no soportado)'; return; }
+    const bin = atob(data.data);
+    const bytes = Uint8Array.from(bin, ch => ch.charCodeAt(0));
+    url = URL.createObjectURL(new Blob([bytes], { type: data.mime.split(';')[0] }));
+    mediosUrl.set(m.id, url);
+  }
+  const el = m.tipo === 'audio'
+    ? h('audio', { controls: '', src: url, preload: 'metadata' })
+    : h('a', { href: url, target: '_blank', rel: 'noopener' }, h('img', { src: url, alt: 'Imagen del cliente', class: 'foto' }));
+  hueco.replaceChildren(el);
 }
 
 $('#back').addEventListener('click', () => document.body.classList.remove('abierto'));
@@ -309,13 +343,37 @@ function suscribir() {
 }
 
 function nuevoMensaje(m) {
+  const esMedio = m.rol === 'cliente' && (m.tipo === 'audio' || m.tipo === 'imagen');
   if (m.user_id === state.sel) {
     if (!state.mensajes.some(x => x.id === m.id)) { state.mensajes.push(m); pintarChat(); }
+    if (esMedio && document.hidden) alertarMedio(m);
   } else if (m.rol === 'cliente') {
     state.unread.add(m.user_id);
+    if (esMedio) { state.media.set(m.user_id, m.tipo); alertarMedio(m); }
     pintarLista();
   }
 }
+
+/* Aviso de audio/imagen: sonido, titulo de la pestana y notificacion del navegador. */
+function alertarMedio(m) {
+  const c = state.clientes.get(m.user_id);
+  const quien = c ? nombreDe(c) : 'Un cliente';
+  const que = m.tipo === 'audio' ? 'un audio' : 'una imagen';
+  document.title = '● ' + quien + ' envió ' + que;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880; g.gain.value = 0.15;
+    o.start(); o.stop(ctx.currentTime + 0.25);
+  } catch {}
+  try {
+    if ('Notification' in window && Notification.permission === 'granted')
+      new Notification(quien, { body: 'Envió ' + que });
+  } catch {}
+}
+if ('Notification' in window && Notification.permission === 'default')
+  document.addEventListener('click', () => Notification.requestPermission(), { once: true });
 
 /* ---------- pedidos ---------- */
 const ESTADOS = ['nuevo', 'preparando', 'en_camino', 'entregado', 'cancelado'];
